@@ -1,72 +1,80 @@
+import logging
 import fastapi
 import sqlite3
+from fastapi import HTTPException
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 
-
-# Conecta a la base de datos
-conn = sqlite3.connect("sql/dispositivos.db")
+# Crea la base de datos
+conn = sqlite3.connect("iot.db")
 
 app = fastapi.FastAPI()
 
 origins = [
-    "http://127.0.0.1:8000",
-    "http://localhost:8000",
-
+    "http://localhost:8080"
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-)
+)   
 
-class Dispositivos(BaseModel):
-    id_dispositivo: int
-    dispositivo: str
-    valor: int
 
-@app.post("/dispositivos")
-async def crear_dispositivos(dispositivo: Dispositivos):
-    c = conn.cursor()
-    c.execute('INSERT INTO dispositivos (id_dispositivo, dispositivo, valor) VALUES (?, ?, ?)',
-              (dispositivo.id_dispositivo, dispositivo.dispositivo, dispositivo.valor))
-    conn.commit()
-    return dispositivo
+class iot(BaseModel):
+    id : int
+    dispositivo : str
+    valor : int
 
-@app.get("/dispositivos")
+
+
+@app.get("/")
 async def obtener_dispositivos():
-    """Obtiene todos los dispositivos."""
+    """Obtiene todos los contactos."""
+    # TODO Consulta todos los contactos de la base de datos y los envia en un JSON
     c = conn.cursor()
-    c.execute('SELECT * FROM dispositivos;')
+    c.execute('SELECT * FROM iot;')
     response = []
     for row in c:
-        dispositivo = {"id_dispositivo": row[0], "dispositivo": row[1], "valor": row[2]}
-        response.append(dispositivo)
+        iot = {"id":row[0],"dispositivo":row[1], "valor":row[2]}
+        response.append(iot)
     return response
 
-@app.get("/dispositivos/{id_dispositivo}")
-async def obtener_valor_dispositivo(id_dispositivo: int):
-    """Obtiene el valor de un dispositivo por su id_dispositivo."""
+
+
+
+@app.get("/iot/{id}")
+async def obtener_dispositivo(id: int):
+    """Obtiene un dispositivo por su ID."""
+    # Consulta el dispositivo por su ID
     c = conn.cursor()
-    c.execute('SELECT valor FROM dispositivos WHERE id_dispositivo = ?', (id_dispositivo,))
-    valor = c.fetchone()  # Obtiene la primera fila de la consulta
-    
-    return {"valor": valor[0] if valor else None}  
+    c.execute('SELECT * FROM iot WHERE id = ?', (id,))
+    row = c.fetchone()
+
+    if row is not None:
+      
+        valor = row[2]
+        return valor
+    else:
+        
+        return -1
 
 
-@app.put("/dispositivos/{id_dispositivo}/{valor}")
-async def actualizar_dispositivo(id_dispositivo: int, valor: int):
+
+@app.put("/iot/{id}/{valor}")
+async def actualizar_dispositivo(id: int, valor: int):
     """Actualiza un dispositivo."""
-    # Actualiza el dispositivo en la base de datos con el nuevo valor
+    # Consulta el dispositivo por su ID antes de la actualización
     c = conn.cursor()
-    c.execute('UPDATE dispositivos SET valor = ? WHERE id_dispositivo = ?', (valor, id_dispositivo))
-    conn.commit()
+    c.execute('SELECT * FROM iot WHERE id = ?', (id,))
+    row = c.fetchone()
 
-    # Recupera el valor actualizado desde la base de datos
-    c.execute('SELECT valor FROM dispositivos WHERE id_dispositivo = ?', (id_dispositivo,))
-    nuevo_valor = c.fetchone()[0]
-
-    return {"message": "Dispositivo actualizado correctamente", "nuevo_valor": nuevo_valor}
-
+    if row is not None:
+        # Si se encuentra el dispositivo, realiza la actualización
+        c.execute('UPDATE iot SET valor = ? WHERE id = ?', (valor, id))
+        conn.commit()
+        return valor
+    else:
+        return -1
